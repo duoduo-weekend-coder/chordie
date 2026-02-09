@@ -1,16 +1,7 @@
 // Piano keyboard rendering and Web Audio playback for Chordie 初弦
 
 let audioCtx = null;
-
-// iOS Safari requires both an <audio> element play and AudioContext.resume()
-// inside a user gesture to enable Web Audio output. The <audio> element also
-// switches the audio session so sound plays even when the mute switch is on.
-const _silentDataURI = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRBRIAAAAAAD/+1DEAAAHAAGf9AAAIiWJa/PJEBBAEAwDBmTAABh4PkDgfUBAMOD6gIBj5/+XB9QEAx8H1AQDDg+oCAfKAgQ+D6g4Hw+oCABZBwfNAQAAAAUdBx0AAAD/TgEA04cH0IODBANP/5cHygIBhwfUBAP/+XB8oCAfKAEGH1A4P/Lg+oCAYcH//KAgGHB9QEA//5cHygIB8oCAYf/8uD5QEA+UBAMP/+sA+oCAYcH1AQD//lwfUBAPlACD/6wD6gIB8oCAYf/8uD5QEAw4PqAgH/Lg+UBAPl//7UMQfAAADSAAAAAAAAANIAAAAACAYf/8uD5QEA+UBAMP/+XB9QEAw4PqAgH//KAgGHB9QEA//5QEAw//1gH1A4Hw4PqAgH//lwfKAgHygIBh//y4PlAQD5QEAw//1gH1AQD5QEAw//5cHygIB8oCAYf/8uD5QEA+UBAMP/+sA+oCAfKAgGH//Lg+UBAP/+1DEGwAAA0gAAAAAAAAADSAAAAAAKAgGH//Lg+UBAPl';
-const _silentAudio = document.createElement('audio');
-_silentAudio.controls = false;
-_silentAudio.preload = 'auto';
-_silentAudio.loop = false;
-_silentAudio.src = _silentDataURI;
+let _audioReady = false;
 
 // Debug overlay for diagnosing iOS audio issues (temporary)
 let _debugEl = null;
@@ -24,35 +15,57 @@ function _debugLog(msg) {
   _debugEl.scrollTop = _debugEl.scrollHeight;
 }
 
+// iOS Safari silently mutes an AudioContext that was created outside a user
+// gesture, even after resume() reports 'running'. The only reliable fix is
+// to create a *new* AudioContext synchronously inside a user gesture and
+// immediately produce output on it.
 function _unlockAudio() {
-  _debugLog('gesture detected, event: ' + (event ? event.type : 'unknown'));
-  // Play the HTML audio element to switch iOS audio session
-  _silentAudio.play().then(() => _debugLog('audio el: played')).catch(e => _debugLog('audio el err: ' + e.message));
-  // Create and resume AudioContext
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    _debugLog('ctx created, state: ' + audioCtx.state);
+  _debugLog('gesture: ' + (event ? event.type : '?'));
+
+  // If we already have a working context, we're done
+  if (_audioReady) return;
+
+  // Close any existing (silently muted) context
+  if (audioCtx) {
+    try { audioCtx.close(); } catch (e) {}
+    audioCtx = null;
+    _debugLog('closed old ctx');
   }
+
+  // Create a fresh context inside this gesture
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  _debugLog('new ctx, state: ' + audioCtx.state);
+
+  // On iOS the new context may still start suspended — resume it
   if (audioCtx.state === 'suspended') {
-    audioCtx.resume().then(() => _debugLog('resume resolved, state: ' + audioCtx.state)).catch(e => _debugLog('resume err: ' + e.message));
+    audioCtx.resume();
   }
-  _debugLog('ctx state: ' + audioCtx.state + ', sampleRate: ' + audioCtx.sampleRate);
-  // Play a silent buffer through Web Audio as well
+
+  // Play a short audible test tone (very brief, low volume) to force iOS
+  // to actually route audio output
   try {
-    const buf = audioCtx.createBuffer(1, 1, 22050);
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-    src.connect(audioCtx.destination);
-    src.start(0);
-    _debugLog('silent buffer played');
-  } catch (e) { _debugLog('buffer err: ' + e.message); }
-  // Check if unlocked
-  if (audioCtx.state === 'running') {
-    _debugLog('UNLOCKED');
-    document.removeEventListener('touchstart', _unlockAudio, true);
-    document.removeEventListener('touchend', _unlockAudio, true);
-    document.removeEventListener('click', _unlockAudio, true);
-  }
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.05);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(audioCtx.currentTime);
+    osc.stop(audioCtx.currentTime + 0.05);
+    _debugLog('test tone scheduled');
+  } catch (e) { _debugLog('test tone err: ' + e.message); }
+
+  // Check state after a short delay (resume is async on iOS)
+  setTimeout(() => {
+    _debugLog('after delay, state: ' + (audioCtx ? audioCtx.state : 'null'));
+    if (audioCtx && audioCtx.state === 'running') {
+      _audioReady = true;
+      _debugLog('AUDIO READY');
+      document.removeEventListener('touchstart', _unlockAudio, true);
+      document.removeEventListener('touchend', _unlockAudio, true);
+      document.removeEventListener('click', _unlockAudio, true);
+    }
+  }, 100);
 }
 document.addEventListener('touchstart', _unlockAudio, true);
 document.addEventListener('touchend', _unlockAudio, true);
