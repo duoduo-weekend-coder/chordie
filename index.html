@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f1117">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="description" content="Chordie 初弦 — 每天学一个钢琴和弦，30天入门伴奏">
+  <title>Chordie 初弦</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="img/logo.png">
+  <link rel="apple-touch-icon" href="img/logo.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- Splash animation -->
+  <div id="splash" class="splash">
+    <div class="splash-logo">
+      <!-- Staff lines -->
+      <div class="staff">
+        <div class="staff-line" style="--i:0"></div>
+        <div class="staff-line" style="--i:1"></div>
+        <div class="staff-line" style="--i:2"></div>
+        <div class="staff-line" style="--i:3"></div>
+        <div class="staff-line" style="--i:4"></div>
+        <div class="staff-line" style="--i:5"></div>
+      </div>
+      <!-- Vertical stem -->
+      <div class="stem"></div>
+      <!-- Note circles -->
+      <div class="note-circle" style="--j:0"></div>
+      <div class="note-circle" style="--j:1"></div>
+      <div class="note-circle" style="--j:2"></div>
+    </div>
+    <div class="splash-text">
+      <span class="splash-cn">初弦</span>
+      <span class="splash-en">Chordie</span>
+    </div>
+  </div>
+
+  <div id="app"></div>
+  <script src="js/data.js"></script>
+  <script src="js/piano.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
