@@ -1,26 +1,33 @@
 // Piano keyboard rendering and Web Audio playback for Chordie 初弦
 
 let audioCtx = null;
+let _audioUnlocked = false;
 
 // iOS Safari requires AudioContext to be created and resumed inside a user
-// gesture handler. We attach a one-time listener on the first touch/click to
-// guarantee the context is unlocked before any playback attempt.
+// gesture handler. Unlike other browsers, iOS will re-suspend the context if
+// no audio is played promptly. We keep retrying on every touch/click until we
+// confirm the context is in 'running' state.
 function _unlockAudio() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
+  const ctx = audioCtx;
+  if (ctx.state === 'suspended') {
+    ctx.resume();
   }
   // Play a silent buffer to fully unlock on iOS
-  const buf = audioCtx.createBuffer(1, 1, 22050);
-  const src = audioCtx.createBufferSource();
+  const buf = ctx.createBuffer(1, 1, 22050);
+  const src = ctx.createBufferSource();
   src.buffer = buf;
-  src.connect(audioCtx.destination);
+  src.connect(ctx.destination);
   src.start(0);
-  document.removeEventListener('touchstart', _unlockAudio, true);
-  document.removeEventListener('touchend', _unlockAudio, true);
-  document.removeEventListener('click', _unlockAudio, true);
+  // Only stop listening once we confirm it's running
+  if (ctx.state === 'running') {
+    _audioUnlocked = true;
+    document.removeEventListener('touchstart', _unlockAudio, true);
+    document.removeEventListener('touchend', _unlockAudio, true);
+    document.removeEventListener('click', _unlockAudio, true);
+  }
 }
 document.addEventListener('touchstart', _unlockAudio, true);
 document.addEventListener('touchend', _unlockAudio, true);
@@ -212,7 +219,9 @@ function renderPiano(container, highlightNotes = []) {
       blackKeyElements.push(key);
     }
 
-    // Touch and click handler
+    // Touch and click handler — use touchstart/touchend for iOS compatibility,
+    // with pointerdown/pointerup fallback for desktop
+    let _touched = false;
     const startNote = (e) => {
       e.preventDefault();
       key.classList.add('active');
@@ -223,8 +232,10 @@ function renderPiano(container, highlightNotes = []) {
       key.classList.remove('active');
     };
 
-    key.addEventListener('pointerdown', startNote);
-    key.addEventListener('pointerup', endNote);
+    key.addEventListener('touchstart', (e) => { _touched = true; startNote(e); }, { passive: false });
+    key.addEventListener('touchend', (e) => { endNote(e); setTimeout(() => { _touched = false; }, 50); }, { passive: false });
+    key.addEventListener('pointerdown', (e) => { if (!_touched) startNote(e); });
+    key.addEventListener('pointerup', (e) => { if (!_touched) endNote(e); });
     key.addEventListener('pointerleave', endNote);
   });
 
