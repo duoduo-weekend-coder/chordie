@@ -12,16 +12,31 @@ _silentAudio.preload = 'auto';
 _silentAudio.loop = false;
 _silentAudio.src = _silentDataURI;
 
+// Debug overlay for diagnosing iOS audio issues (temporary)
+let _debugEl = null;
+function _debugLog(msg) {
+  if (!_debugEl) {
+    _debugEl = document.createElement('div');
+    _debugEl.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.85);color:#0f0;font:12px monospace;padding:8px;max-height:30vh;overflow:auto;z-index:99999;';
+    document.body.appendChild(_debugEl);
+  }
+  _debugEl.innerHTML += msg + '<br>';
+  _debugEl.scrollTop = _debugEl.scrollHeight;
+}
+
 function _unlockAudio() {
+  _debugLog('gesture detected, event: ' + (event ? event.type : 'unknown'));
   // Play the HTML audio element to switch iOS audio session
-  _silentAudio.play().catch(() => {});
+  _silentAudio.play().then(() => _debugLog('audio el: played')).catch(e => _debugLog('audio el err: ' + e.message));
   // Create and resume AudioContext
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    _debugLog('ctx created, state: ' + audioCtx.state);
   }
   if (audioCtx.state === 'suspended') {
-    audioCtx.resume();
+    audioCtx.resume().then(() => _debugLog('resume resolved, state: ' + audioCtx.state)).catch(e => _debugLog('resume err: ' + e.message));
   }
+  _debugLog('ctx state: ' + audioCtx.state + ', sampleRate: ' + audioCtx.sampleRate);
   // Play a silent buffer through Web Audio as well
   try {
     const buf = audioCtx.createBuffer(1, 1, 22050);
@@ -29,9 +44,11 @@ function _unlockAudio() {
     src.buffer = buf;
     src.connect(audioCtx.destination);
     src.start(0);
-  } catch (e) {}
+    _debugLog('silent buffer played');
+  } catch (e) { _debugLog('buffer err: ' + e.message); }
   // Check if unlocked
   if (audioCtx.state === 'running') {
+    _debugLog('UNLOCKED');
     document.removeEventListener('touchstart', _unlockAudio, true);
     document.removeEventListener('touchend', _unlockAudio, true);
     document.removeEventListener('click', _unlockAudio, true);
