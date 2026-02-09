@@ -1,29 +1,37 @@
 // Piano keyboard rendering and Web Audio playback for Chordie 初弦
 
 let audioCtx = null;
-let _audioUnlocked = false;
 
-// iOS Safari requires AudioContext to be created and resumed inside a user
-// gesture handler. Unlike other browsers, iOS will re-suspend the context if
-// no audio is played promptly. We keep retrying on every touch/click until we
-// confirm the context is in 'running' state.
+// iOS Safari requires both an <audio> element play and AudioContext.resume()
+// inside a user gesture to enable Web Audio output. The <audio> element also
+// switches the audio session so sound plays even when the mute switch is on.
+const _silentDataURI = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRBRIAAAAAAD/+1DEAAAHAAGf9AAAIiWJa/PJEBBAEAwDBmTAABh4PkDgfUBAMOD6gIBj5/+XB9QEAx8H1AQDDg+oCAfKAgQ+D6g4Hw+oCABZBwfNAQAAAAUdBx0AAAD/TgEA04cH0IODBANP/5cHygIBhwfUBAP/+XB8oCAfKAEGH1A4P/Lg+oCAYcH//KAgGHB9QEA//5cHygIB8oCAYf/8uD5QEA+UBAMP/+sA+oCAYcH1AQD//lwfUBAPlACD/6wD6gIB8oCAYf/8uD5QEAw4PqAgH/Lg+UBAPl//7UMQfAAADSAAAAAAAAANIAAAAACAYf/8uD5QEA+UBAMP/+XB9QEAw4PqAgH//KAgGHB9QEA//5QEAw//1gH1A4Hw4PqAgH//lwfKAgHygIBh//y4PlAQD5QEAw//1gH1AQD5QEAw//5cHygIB8oCAYf/8uD5QEA+UBAMP/+sA+oCAfKAgGH//Lg+UBAP/+1DEGwAAA0gAAAAAAAAADSAAAAAAKAgGH//Lg+UBAPl';
+const _silentAudio = document.createElement('audio');
+_silentAudio.controls = false;
+_silentAudio.preload = 'auto';
+_silentAudio.loop = false;
+_silentAudio.src = _silentDataURI;
+
 function _unlockAudio() {
+  // Play the HTML audio element to switch iOS audio session
+  _silentAudio.play().catch(() => {});
+  // Create and resume AudioContext
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   }
-  const ctx = audioCtx;
-  if (ctx.state === 'suspended') {
-    ctx.resume();
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
   }
-  // Play a silent buffer to fully unlock on iOS
-  const buf = ctx.createBuffer(1, 1, 22050);
-  const src = ctx.createBufferSource();
-  src.buffer = buf;
-  src.connect(ctx.destination);
-  src.start(0);
-  // Only stop listening once we confirm it's running
-  if (ctx.state === 'running') {
-    _audioUnlocked = true;
+  // Play a silent buffer through Web Audio as well
+  try {
+    const buf = audioCtx.createBuffer(1, 1, 22050);
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf;
+    src.connect(audioCtx.destination);
+    src.start(0);
+  } catch (e) {}
+  // Check if unlocked
+  if (audioCtx.state === 'running') {
     document.removeEventListener('touchstart', _unlockAudio, true);
     document.removeEventListener('touchend', _unlockAudio, true);
     document.removeEventListener('click', _unlockAudio, true);
