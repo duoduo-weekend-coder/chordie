@@ -2,6 +2,30 @@
 
 let audioCtx = null;
 
+// iOS Safari requires AudioContext to be created and resumed inside a user
+// gesture handler. We attach a one-time listener on the first touch/click to
+// guarantee the context is unlocked before any playback attempt.
+function _unlockAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (audioCtx.state === 'suspended') {
+    audioCtx.resume();
+  }
+  // Play a silent buffer to fully unlock on iOS
+  const buf = audioCtx.createBuffer(1, 1, 22050);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(audioCtx.destination);
+  src.start(0);
+  document.removeEventListener('touchstart', _unlockAudio, true);
+  document.removeEventListener('touchend', _unlockAudio, true);
+  document.removeEventListener('click', _unlockAudio, true);
+}
+document.addEventListener('touchstart', _unlockAudio, true);
+document.addEventListener('touchend', _unlockAudio, true);
+document.addEventListener('click', _unlockAudio, true);
+
 function getAudioContext() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
