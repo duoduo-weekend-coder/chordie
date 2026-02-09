@@ -4,7 +4,7 @@
 
 <h1 align="center">Chordie 初弦</h1>
 
-<p align="center">每天学一个钢琴和弦，30天入门伴奏</p>
+<p align="center">每天学一个钢琴和弦，串起青春</p>
 
 <p align="center">
   <a href="https://duoduo-weekend-coder.github.io/chordie/">Try it live</a>
