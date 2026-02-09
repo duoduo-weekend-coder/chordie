@@ -69,13 +69,9 @@ function getAudioContext() {
 }
 
 /**
- * Play a single note with a realistic piano-like tone using additive synthesis + ADSR envelope
- * @param {string} noteName - e.g. 'C4'
- * @param {number} duration - in seconds
- * @param {number} startDelay - delay before note starts (seconds)
+ * Internal: schedule oscillators on a running context
  */
-function playNote(noteName, duration = 1.2, startDelay = 0) {
-  const ctx = getAudioContext();
+function _scheduleNote(ctx, noteName, duration, startDelay) {
   const freq = NOTE_FREQUENCIES[noteName];
   if (!freq) return;
 
@@ -110,7 +106,6 @@ function playNote(noteName, duration = 1.2, startDelay = 0) {
     hGain.gain.setValueAtTime(h.gain * 0.15, now);
     osc.type = 'sine';
     osc.frequency.setValueAtTime(freq * h.ratio, now);
-    // Slight detuning for warmth on higher harmonics
     if (h.ratio > 1) {
       osc.detune.setValueAtTime(Math.random() * 4 - 2, now);
     }
@@ -119,6 +114,28 @@ function playNote(noteName, duration = 1.2, startDelay = 0) {
     osc.start(now);
     osc.stop(now + duration + 0.02);
   });
+  _debugLog('note ' + noteName + ' scheduled, ctx.state=' + ctx.state + ', time=' + now.toFixed(2));
+}
+
+/**
+ * Play a single note — waits for AudioContext to be running before scheduling
+ * @param {string} noteName - e.g. 'C4'
+ * @param {number} duration - in seconds
+ * @param {number} startDelay - delay before note starts (seconds)
+ */
+function playNote(noteName, duration = 1.2, startDelay = 0) {
+  const ctx = getAudioContext();
+  _debugLog('playNote(' + noteName + ') ctx.state=' + ctx.state);
+
+  if (ctx.state === 'running') {
+    _scheduleNote(ctx, noteName, duration, startDelay);
+  } else {
+    // Context not ready yet — wait for it, then play
+    ctx.resume().then(() => {
+      _debugLog('playNote resume resolved, state=' + ctx.state);
+      _scheduleNote(ctx, noteName, duration, startDelay);
+    });
+  }
 }
 
 /**

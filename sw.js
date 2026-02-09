@@ -1,6 +1,6 @@
 // Service Worker for Chordie 初弦 — offline caching
 
-const CACHE_NAME = 'chordie-v12';
+const CACHE_NAME = 'chordie-v13';
 const ASSETS = [
   './',
   './index.html',
