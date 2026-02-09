@@ -3,46 +3,23 @@
 let audioCtx = null;
 let _audioReady = false;
 
-// Debug overlay for diagnosing iOS audio issues (temporary)
-let _debugEl = null;
-function _debugLog(msg) {
-  if (!_debugEl) {
-    _debugEl = document.createElement('div');
-    _debugEl.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.85);color:#0f0;font:12px monospace;padding:8px;max-height:30vh;overflow:auto;z-index:99999;';
-    document.body.appendChild(_debugEl);
-  }
-  _debugEl.innerHTML += msg + '<br>';
-  _debugEl.scrollTop = _debugEl.scrollHeight;
-}
-
-// iOS Safari silently mutes an AudioContext that was created outside a user
-// gesture, even after resume() reports 'running'. The only reliable fix is
-// to create a *new* AudioContext synchronously inside a user gesture and
-// immediately produce output on it.
+// iOS Safari requires AudioContext to be created and resumed inside a user
+// gesture. We recreate the context on each gesture until it's confirmed running.
 function _unlockAudio() {
-  _debugLog('gesture: ' + (event ? event.type : '?'));
-
-  // If we already have a working context, we're done
   if (_audioReady) return;
 
-  // Close any existing (silently muted) context
   if (audioCtx) {
     try { audioCtx.close(); } catch (e) {}
     audioCtx = null;
-    _debugLog('closed old ctx');
   }
 
-  // Create a fresh context inside this gesture
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  _debugLog('new ctx, state: ' + audioCtx.state);
 
-  // On iOS the new context may still start suspended — resume it
   if (audioCtx.state === 'suspended') {
     audioCtx.resume();
   }
 
-  // Play a short audible test tone (very brief, low volume) to force iOS
-  // to actually route audio output
+  // Play a near-silent tone to force iOS audio routing
   try {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
@@ -52,15 +29,11 @@ function _unlockAudio() {
     gain.connect(audioCtx.destination);
     osc.start(audioCtx.currentTime);
     osc.stop(audioCtx.currentTime + 0.05);
-    _debugLog('test tone scheduled');
-  } catch (e) { _debugLog('test tone err: ' + e.message); }
+  } catch (e) {}
 
-  // Check state after a short delay (resume is async on iOS)
   setTimeout(() => {
-    _debugLog('after delay, state: ' + (audioCtx ? audioCtx.state : 'null'));
     if (audioCtx && audioCtx.state === 'running') {
       _audioReady = true;
-      _debugLog('AUDIO READY');
       document.removeEventListener('touchstart', _unlockAudio, true);
       document.removeEventListener('touchend', _unlockAudio, true);
       document.removeEventListener('click', _unlockAudio, true);
@@ -127,7 +100,6 @@ function _scheduleNote(ctx, noteName, duration, startDelay) {
     osc.start(now);
     osc.stop(now + duration + 0.02);
   });
-  _debugLog('note ' + noteName + ' scheduled, ctx.state=' + ctx.state + ', time=' + now.toFixed(2));
 }
 
 /**
@@ -138,14 +110,10 @@ function _scheduleNote(ctx, noteName, duration, startDelay) {
  */
 function playNote(noteName, duration = 1.2, startDelay = 0) {
   const ctx = getAudioContext();
-  _debugLog('playNote(' + noteName + ') ctx.state=' + ctx.state);
-
   if (ctx.state === 'running') {
     _scheduleNote(ctx, noteName, duration, startDelay);
   } else {
-    // Context not ready yet — wait for it, then play
     ctx.resume().then(() => {
-      _debugLog('playNote resume resolved, state=' + ctx.state);
       _scheduleNote(ctx, noteName, duration, startDelay);
     });
   }
